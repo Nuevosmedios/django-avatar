@@ -3,7 +3,7 @@ import os
 import hashlib
 from PIL import Image
 
-from django.db import models
+from django.db import models, connection
 from django.core.files import File
 from django.core.files.base import ContentFile
 from django.core.files.storage import get_storage_class
@@ -25,6 +25,7 @@ avatar_storage = get_storage_class(settings.AVATAR_STORAGE)()
 
 def avatar_file_path(instance=None, filename=None, size=None, ext=None):
     tmppath = [settings.AVATAR_STORAGE_DIR]
+    
     if settings.AVATAR_HASH_USERDIRNAMES:
         tmp = hashlib.md5(get_username(instance.user)).hexdigest()
         tmppath.extend([tmp[0], tmp[1], get_username(instance.user)])
@@ -49,7 +50,8 @@ def avatar_file_path(instance=None, filename=None, size=None, ext=None):
     if size:
         tmppath.extend(['resized', str(size)])
     tmppath.append(os.path.basename(filename))
-    return os.path.join(*tmppath)
+    return os.path.join('sites', connection.schema_name, *tmppath)
+    #return os.path.join(*tmppath)
 
 
 def find_extension(format):
