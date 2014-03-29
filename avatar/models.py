@@ -23,7 +23,7 @@ except ImportError:
 avatar_storage = get_storage_class(settings.AVATAR_STORAGE)()
 
 
-def avatar_file_path(instance=None, filename=None, size=None, ext=None):
+def avatar_file_path(instance=None, filename=None, size=None, ext=None, new=False):
     tmppath = [settings.AVATAR_STORAGE_DIR]
     
     if settings.AVATAR_HASH_USERDIRNAMES:
@@ -44,15 +44,26 @@ def avatar_file_path(instance=None, filename=None, size=None, ext=None):
     else:
         # File doesn't exist yet
         if settings.AVATAR_HASH_FILENAMES:
-            (root, ext) = os.path.splitext(filename)
+            (root, oldext) = os.path.splitext(filename)
             filename = hashlib.md5(force_bytes(filename)).hexdigest()
-            filename = filename + ext
+            filename = filename + oldext
     if size:
         tmppath.extend(['resized', str(size)])
     tmppath.append(os.path.basename(filename))
-    return os.path.join('sites', connection.schema_name, *tmppath)
-    #return os.path.join(*tmppath)
-
+    filename = os.path.join('sites', connection.schema_name, *tmppath)
+ 
+     # ext overrides current extension
+    (root, oldext) = os.path.splitext(filename)
+    if ext and ext != oldext:
+        filename = root + "." + ext
+        if new:
+            # file does not yet exist, avoid filename collision
+            if instance is not None:
+                filename = instance.avatar.storage.get_available_name(filename)
+            else:
+                pass # Not sure how to avoid collisions without storage
+ 
+    return filename
 
 def find_extension(format):
     format = format.lower()
@@ -113,7 +124,7 @@ class Avatar(models.Model):
                 thumb_file = ContentFile(thumb.getvalue())
             else:
                 thumb_file = File(orig)
-            thumb = self.avatar.storage.save(self.avatar_name(size), thumb_file)
+            thumb = self.avatar.storage.save(self.avatar_name(size, new=True), thumb_file)
         except IOError:
             return  # What should we do here?  Render a "sorry, didn't work" img?
 
@@ -123,12 +134,13 @@ class Avatar(models.Model):
     def get_absolute_url(self):
         return self.avatar_url(settings.AVATAR_DEFAULT_SIZE)
 
-    def avatar_name(self, size):
+    def avatar_name(self, size, new=False):
         ext = find_extension(settings.AVATAR_THUMB_FORMAT)
         return avatar_file_path(
             instance=self,
             size=size,
-            ext=ext
+            ext=ext,
+            new=new,
         )
 
 
